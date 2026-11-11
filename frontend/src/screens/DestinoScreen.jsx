@@ -38,6 +38,17 @@ export function DestinoScreen({ target, setTarget, bridge }) {
 
   return (
     <ScreenContainer>
+      <p
+        style={{
+          margin: `0 0 ${space.lg}px`,
+          fontSize: 12,
+          color: colors.muted,
+          lineHeight: 1.45,
+        }}
+      >
+        Destino UDP del <strong style={{ color: colors.text }}>bridge en el PC</strong> (esta PWA
+        no envía OSC por UDP sola). Para teléfono → UDP directo usa la app Android del repo.
+      </p>
       <div style={{ marginBottom: space.md }}>
         <label
           style={{ display: "block", fontSize: 13, color: colors.muted, marginBottom: space.xs }}

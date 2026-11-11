@@ -138,6 +138,17 @@ export function SensorsScreen({ bridge }) {
 
   return (
     <ScreenContainer title="Sensores OSC">
+      <p
+        style={{
+          margin: `0 0 ${space.md}px`,
+          fontSize: 12,
+          color: colors.muted,
+          lineHeight: 1.45,
+        }}
+      >
+        Los envíos OSC salen del <strong style={{ color: colors.text }}>servidor Node en el PC</strong>{" "}
+        (esta PWA no habla UDP). Sin bridge, no hay OSC. App Android del repo = UDP directo.
+      </p>
       <div
         style={{
           display: "flex",

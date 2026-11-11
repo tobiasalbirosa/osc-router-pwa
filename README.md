@@ -1,120 +1,119 @@
 # OSC Router
 
-Puente local para enviar **acelerómetro / giroscopio** como mensajes **OSC** (float 0–1) hacia un destino **UDP** (`IP/host` + puerto).
+Envía **acelerómetro / giroscopio** del teléfono como mensajes **OSC** (float 0–1) a un destino **UDP** (`IP/host` + puerto).
 
-Incluye:
+Rutas: `/aX` `/aY` `/aZ` y `/gX` `/gY` `/gZ`.
 
-1. **Servidor Node + PWA** (navegador / móvil por HTTPS en la LAN).
-2. **Cliente Android** (React Native / Expo) que envía OSC por UDP en segundo plano.
+---
 
-Rutas OSC: `/aX` `/aY` `/aZ` (acelerómetro) y `/gX` `/gY` `/gZ` (giroscopio).
+## Elige el camino
+
+| Objetivo | Qué usar |
+| --- | --- |
+| **Teléfono solo** → OSC/UDP (sin PC como puente) | **Cliente Android** en `native/OscUdpClient` |
+| UI en el navegador + visualizador en el PC | **PWA + bridge Node** (el teléfono **no** puede abrir UDP solo) |
+
+Chrome/Android **no** exponen sockets UDP a una PWA. Por eso la web siempre necesita el servidor Node en otro dispositivo (o en el mismo PC) para reenviar OSC.
+
+```text
+PWA:     Teléfono ──WebSocket──► PC (Node) ──OSC/UDP──► Max / SC / …
+APK:     Teléfono ──OSC/UDP──────────────────────────► Max / SC / …
+```
 
 ---
 
 ## Requisitos
 
-- **Node.js** 18+ (recomendado 20+)
-- Misma Wi‑Fi entre PC y teléfono (para pruebas por IPv4 LAN)
-- Opcional (app nativa): Android SDK / dispositivo o emulador
+- **Node.js** 18+ (recomendado 20+) para bridge / listener
+- Misma Wi‑Fi (LAN IPv4) entre emisor y receptor OSC
+- Cliente nativo: Android SDK / dispositivo o emulador
 
 ---
 
-## 1. PWA + bridge WebSocket → OSC (local)
+## 1. Cliente Android (recomendado si no quieres otro dispositivo de puente)
 
-En la raíz del repo:
+### Descargar e instalar (cualquier Android)
+
+APK firmada (debug keystore de desarrollo) en el release de GitHub:
+
+**https://github.com/tobiasalbirosa/osc-router-pwa/releases/latest**
+
+1. Abre el link en el teléfono (Chrome).
+2. Descarga `OscUdpClient.apk`.
+3. Si Android bloquea: Ajustes → permitir instalar desde ese origen.
+4. En la app → **Destino**: IPv4 LAN del PC receptor y el puerto OSC (p. ej. `8000`).
+
+Carpeta del código: [`native/OscUdpClient`](native/OscUdpClient). Detalle: [`native/OscUdpClient/README.md`](native/OscUdpClient/README.md).
+
+### Compilar desde el repo
+
+```bash
+cd native/OscUdpClient
+npm install
+npm run build:apk:lan    # genera dist/OscUdpClient-lan-release.apk
+# o desarrollo:
+npm run android          # o npm run start:lan + dispositivo con dev client
+```
+
+En la app:
+
+- **Sensores**: switch **Segundo plano**, intervalo de envío, acelerómetro y/o giroscopio.
+- **Destino**: IP/host y puerto UDP del software que escucha OSC (p. ej. la IP de tu PC donde corre Max).
+
+El APK **no** arranca un servidor: solo captura sensores y envía datagramas OSC.
+
+Para comprobar recepción en el PC (desde la raíz del repo):
 
 ```bash
 npm install
+npm run udp:listen
 ```
 
-### Arranque rápido (HTTPS + IPv4 LAN)
+---
 
-Compila la UI y levanta el servidor HTTPS en `0.0.0.0` (necesario para sensores / PWA en el móvil):
+## 2. PWA + bridge WebSocket → OSC (necesita el PC)
+
+El teléfono abre la PWA; el **PC** corre el bridge y hace el envío UDP.
 
 ```bash
+npm install
 npm run pwa:lan
 ```
 
-En la consola verás algo como:
+Consola (ejemplo):
 
 ```text
 [PWA / teléfono]  https://192.168.x.x:3840/
 ```
 
-Abre esa URL en **Chrome** del móvil, acepta el certificado autofirmado y, si hace falta, recarga una vez.
-
-### Alternativas
+Abre esa URL en **Chrome** del móvil, acepta el certificado autofirmado y recarga si hace falta.
 
 | Comando | Qué hace |
 | --- | --- |
-| `npm run build:web` | Solo genera `dist/` |
-| `npm run start:https` | Sirve `dist/` + WebSocket con HTTPS (sin rebuild) |
-| `npm start` | HTTP (sin HTTPS: sensores/PWA suelen fallar en el móvil) |
-| `npm run dev:web` | Vite en desarrollo (puerto 5173; el bridge WS sigue en el servidor Node) |
+| `npm run build:web` | Genera `dist/` |
+| `npm run start:https` | Sirve `dist/` + WS con HTTPS (sin rebuild) |
+| `npm start` | HTTP (sensores/PWA suelen fallar en el móvil) |
+| `npm run dev:web` | Vite (5173); el bridge WS sigue en Node |
 
-Puerto por defecto: **3840**. Otro puerto:
+Puerto por defecto del bridge: **3840**.
 
-```bash
-# PowerShell
-$env:PORT=3850; npm run start:https
-```
-
-En la app web:
-
-- **Sensores**: intervalo de envío y activar acelerómetro / giroscopio.
-- **Destino**: IP/host y puerto UDP del software que escucha OSC (Max, SuperCollider, etc.).
-
-El teléfono habla con el bridge por **WebSocket**; el bridge reenvía **OSC/UDP** al destino configurado.
+En la UI web, **Destino** es el host/puerto UDP que usará el **bridge en el PC**, no un envío UDP desde el navegador.
 
 ---
 
-## 2. Escuchar OSC UDP en el PC (opcional)
-
-Para ver lo que llega por UDP (útil con el cliente Android o con cualquier fuente OSC):
+## 3. Escuchar OSC UDP en el PC (opcional)
 
 ```bash
 npm run udp:listen
 ```
 
-Por defecto escucha el puerto **8000**. Rango de puertos:
+Puerto por defecto **8000**. Rango:
 
 ```bash
 npm run udp:listen:range
 ```
 
-Variables útiles: `OSC_LISTEN_PORT`, `OSC_LISTEN_FROM` / `OSC_LISTEN_TO`, `OSC_VIEW_PORT` (vista HTTP, por defecto `9390`).
-
----
-
-## 3. Cliente Android (solo OSC/UDP, sin servidor)
-
-Carpeta: `native/OscUdpClient`.
-
-```bash
-cd native/OscUdpClient
-npm install
-```
-
-Arranque típico (dev client en LAN, Metro en **8081**):
-
-```bash
-npm run start:lan
-```
-
-O instalar / ejecutar en dispositivo:
-
-```bash
-npm run android
-```
-
-En la app:
-
-- **Sensores**: switch de segundo plano, intervalo, acelerómetro y/o giroscopio.
-- **Destino**: IP/host y puerto UDP del receptor (p. ej. la IP de tu PC).
-
-Para forzar la IPv4 del packager en un teléfono físico, edita `native/OscUdpClient/.env.development` y descomenta `REACT_NATIVE_PACKAGER_HOSTNAME` con la IP de tu PC.
-
-APK / build: ver scripts en `native/OscUdpClient/package.json` (`build:apk:lan`, `rebuild:android`, etc.).
+Variables: `OSC_LISTEN_PORT`, `OSC_LISTEN_FROM` / `OSC_LISTEN_TO`, `OSC_VIEW_PORT` (vista HTTP, por defecto `9390`).
 
 ---
 
@@ -122,17 +121,17 @@ APK / build: ver scripts en `native/OscUdpClient/package.json` (`build:apk:lan`,
 
 ```text
 OSCRouter/
-  server/           # Bridge HTTP(S) + WebSocket → OSC/UDP; listener UDP opcional
-  frontend/         # UI React (PWA)
-  public/           # Manifest, service worker, estáticos
-  scripts/          # Icons, pwa:lan
-  native/OscUdpClient/  # Cliente Android (Expo / RN)
+  server/                 # Bridge HTTP(S)+WS→OSC; listener UDP
+  frontend/               # UI React (PWA; requiere bridge)
+  public/                 # Manifest, SW, estáticos
+  scripts/                # Icons, pwa:lan
+  native/OscUdpClient/    # Cliente Android (UDP directo)
 ```
 
 ---
 
 ## Notas
 
-- En el móvil hace falta **HTTPS** (o el cliente nativo) para sensores de movimiento fiables.
-- El certificado de `start:https` / `pwa:lan` es **autofirmado**: hay que aceptar la advertencia del navegador.
-- Firewall de Windows: permite Node en la red privada si el teléfono no conecta.
+- **PWA sola ≠ envíos OSC UDP**: hace falta el bridge Node (u otra app nativa).
+- Sensores en navegador: contexto **HTTPS** (certificado autofirmado de `pwa:lan` / `start:https`).
+- Firewall de Windows: permite Node / el receptor OSC en la red privada.

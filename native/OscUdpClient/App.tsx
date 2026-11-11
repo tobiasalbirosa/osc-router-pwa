@@ -395,7 +395,9 @@ function AppBody() {
         {tab === 'sensors' ? (
           <>
             <View style={styles.row}>
-              <Text style={styles.label}>Segundo plano</Text>
+              <Text style={styles.label}>
+                Segundo plano {backgroundEnabled ? '(on)' : '(off)'}
+              </Text>
               <Switch
                 value={backgroundEnabled}
                 onValueChange={setBackgroundEnabled}
@@ -405,10 +407,9 @@ function AppBody() {
             </View>
             {bgHint ? <Text style={styles.hint}>{bgHint}</Text> : null}
             <Text style={styles.subHint}>
-              Encendido: notificación persistente y envío con la app oculta o pantalla apagada.
-              Si el teléfono deja de actualizar sensores en segundo plano, dejarán de enviarse
-              datos hasta volver a primer plano (comportamiento del sistema). Apagado: solo con
-              la app visible.
+              On: notificación persistente y envío OSC/UDP con la app oculta o pantalla apagada
+              (según el fabricante). Off: solo con la app en primer plano. Este cliente no usa
+              servidor: el destino es directo por UDP.
             </Text>
 
             <View style={styles.intervalRow}>
@@ -465,12 +466,16 @@ function AppBody() {
           </>
         ) : (
           <>
+            <Text style={styles.subHint}>
+              Destino OSC/UDP directo (sin bridge). En teléfono físico usa la IPv4 LAN del PC
+              receptor, no 127.0.0.1.
+            </Text>
             <Text style={styles.label}>IP/HOST</Text>
             <TextInput
               style={styles.input}
               value={oscHost}
               onChangeText={setOscHost}
-              placeholder="127.0.0.1"
+              placeholder="192.168.1.10"
               placeholderTextColor="#666"
               autoCapitalize="none"
               autoCorrect={false}

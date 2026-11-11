@@ -1,97 +1,80 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# OSC UDP Sensor (cliente Android)
 
-# Getting Started
+App **solo cliente**: lee acelerómetro y/o giroscopio y envía **OSC por UDP** al `IP/host` y puerto que configures. **No** incluye servidor HTTP ni bridge WebSocket.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+Misma normalización que la PWA:
 
-## Step 1: Start Metro
+- `/aX` `/aY` `/aZ` — acelerómetro ±20 m/s² → 0–1
+- `/gX` `/gY` `/gZ` — |°/s| / 360 → 0–1
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+## Requisitos
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+- Node 18+, Android SDK, dispositivo o emulador
+- Receptor OSC en la LAN (p. ej. Max en el PC, o `npm run udp:listen` en la raíz del monorepo)
 
-```sh
-# Using npm
-npm start
+## Descargar APK (sin compilar)
 
-# OR using Yarn
-yarn start
+Release GitHub (archivo `OscUdpClient.apk`):
+
+**https://github.com/tobiasalbirosa/osc-router-pwa/releases/latest**
+
+Instálala en el Android (permite orígenes desconocidos si lo pide). Destino = IP LAN del receptor OSC.
+
+## Compilar e instalar desde código
+
+```bash
+cd native/OscUdpClient
+npm install
+npm run build:apk:lan   # → dist/OscUdpClient-lan-release.apk
 ```
 
-## Step 2: Build and run your app
+Dispositivo / emulador:
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
-
-### Android
-
-```sh
-# Using npm
+```bash
 npm run android
-
-# OR using Yarn
-yarn android
 ```
 
-### iOS
+Dev client + Metro en LAN (puerto **8081**):
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
+```bash
+npm run start:lan
 ```
 
-Then, and every time you update your native dependencies, run:
+Forzar IPv4 del packager en teléfono físico: edita [`.env.development`](.env.development) y descomenta `REACT_NATIVE_PACKAGER_HOSTNAME` con la IP de tu PC.
 
-```sh
-bundle exec pod install
+APK release / scripts: ver `package.json` (`build:apk:lan`, `rebuild:android`, etc.).
+
+## Pantallas
+
+### Sensores
+
+| Control | Comportamiento |
+| --- | --- |
+| **Segundo plano (mantener activo)** | Switch nativo. **On**: servicio en primer plano + notificación; captura/envío puede continuar con la app en segundo plano o pantalla apagada (según el fabricante). **Off**: solo envía con la app en primer plano. |
+| **Enviar cada** | Intervalo entre ráfagas OSC (décimas de segundo `0,1 s` o segundos `s`). |
+| **Acelerómetro / Giroscopio** | Activa cada sensor por separado. |
+
+Permisos Android: notificaciones (Android 13+) para el servicio en segundo plano; acepta la notificación persistente cuando el switch está on.
+
+### Destino
+
+| Campo | Uso |
+| --- | --- |
+| **IP/HOST** | Destino UDP (p. ej. `192.168.1.10` del PC). No uses `127.0.0.1` desde el teléfono físico salvo emulador con red especial. |
+| **Puerto** | Puerto OSC del receptor (p. ej. `8000`). |
+
+Los cambios se guardan en AsyncStorage y se aplican al envío en curso.
+
+## Probar sin Max
+
+En la raíz del repo OSC Router:
+
+```bash
+npm run udp:listen
 ```
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+Pon en **Destino** la IPv4 LAN del PC y el puerto que imprime el listener (por defecto 8000).
 
-```sh
-# Using npm
-npm run ios
+## Limitación vs PWA
 
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+Esta APK **sí** habla UDP. La PWA del monorepo **no** puede: el navegador obliga a usar el bridge Node en otro proceso/dispositivo.
