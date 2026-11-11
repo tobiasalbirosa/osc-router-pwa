@@ -1,0 +1,57 @@
+{
+  "expo": {
+    "name": "OSC UDP Sensor",
+    "slug": "osc-udp-client",
+    "version": "1.0.0",
+    "platforms": ["ios", "android"],
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "oscudpclient",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1c2b3a"
+    },
+    "ios": {
+      "bundleIdentifier": "com.oscudpclient",
+      "supportsTablet": true,
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "oscudpclient",
+              "com.oscudpclient",
+              "exp+osc-udp-client"
+            ]
+          }
+        ]
+      }
+    },
+    "android": {
+      "package": "com.oscudpclient",
+      "permissions": [
+        "INTERNET",
+        "WAKE_LOCK",
+        "POST_NOTIFICATIONS",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_DATA_SYNC"
+      ]
+    },
+    "plugins": [
+      "expo-dev-client",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24,
+            "kotlinVersion": "1.9.25"
+          }
+        }
+      ],
+      "./plugins/withOscNativeModules.js"
+    ]
+  }
+}

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1c2b3a" />
+    <title>OSC Router — Visualizador</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <style>
+      .viewer-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+      }
+      .viewer-head h1 {
+        margin: 0;
+      }
+      .target-pill {
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+        color: var(--accent);
+        background: rgba(61, 156, 240, 0.12);
+        border: 1px solid rgba(61, 156, 240, 0.35);
+        padding: 0.35rem 0.6rem;
+        border-radius: 8px;
+      }
+      .row-sensor {
+        display: grid;
+        grid-template-columns: 6.5rem 1fr 5.5rem;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.55rem;
+      }
+      .row-sensor label {
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .bar {
+        height: 10px;
+        border-radius: 6px;
+        background: var(--border);
+        overflow: hidden;
+      }
+      .bar > i {
+        display: block;
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, var(--accent), var(--good));
+        border-radius: 6px;
+        transition: width 0.05s linear;
+      }
+      .num {
+        font-family: ui-monospace, monospace;
+        font-size: 0.85rem;
+        color: var(--good);
+        text-align: right;
+      }
+      .back {
+        margin-bottom: 1rem;
+      }
+      .back a {
+        color: var(--accent);
+        text-decoration: none;
+        font-size: 0.9rem;
+      }
+      .back a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="back">
+        <a href="./">← Volver al router (sensor)</a>
+      </div>
+      <div class="viewer-head">
+        <h1>Visualizador WebSocket</h1>
+        <div class="target-pill" id="targetPill">OSC: —</div>
+      </div>
+      <p class="sub" style="margin-top: 0">
+        Misma sala que el móvil: el <strong>teléfono</strong> debe estar en la página principal
+        del router con acelerómetro/giroscopio <strong>activos</strong>; este HTML solo muestra lo
+        que el servidor reenvía por WebSocket.
+      </p>
+
+      <section class="card">
+        <h2>Estado</h2>
+        <p class="note" style="margin: 0 0 0.75rem">
+          <span class="status-dot" id="wsDot"></span><span id="wsText">WebSocket: …</span>
+        </p>
+        <div id="rows"></div>
+      </section>
+
+      <footer class="muted">
+        Abre esta página en otro dispositivo en la misma red con la misma URL base; varios
+        visualizadores pueden conectarse a la vez.
+      </footer>
+    </main>
+    <script type="module" src="./viewer.js"></script>
+  </body>
+</html>

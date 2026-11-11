@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OSC — Vista 3D (teléfono)</title>
+    <style>
+      :root {
+        --bg: #0d1117;
+        --panel: rgba(22, 27, 34, 0.92);
+        --text: #e6edf3;
+        --muted: #8b949e;
+        --accent: #58a6ff;
+        --ok: #3fb950;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      #c {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      #ui {
+        position: fixed;
+        left: 12px;
+        top: 12px;
+        max-width: min(360px, 92vw);
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: var(--panel);
+        border: 1px solid rgba(88, 166, 255, 0.2);
+        font-size: 13px;
+        line-height: 1.45;
+        pointer-events: auto;
+      }
+      #ui h1 {
+        margin: 0 0 8px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      #status {
+        font-family: ui-monospace, monospace;
+        font-size: 11px;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+      #status.ok {
+        color: var(--ok);
+      }
+      #sources {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      #sources li {
+        cursor: pointer;
+        padding: 6px 8px;
+        margin: 4px 0;
+        border-radius: 6px;
+        border: 1px solid transparent;
+        font-family: ui-monospace, monospace;
+        font-size: 11px;
+      }
+      #sources li:hover {
+        background: rgba(88, 166, 255, 0.08);
+      }
+      #sources li.active {
+        border-color: var(--accent);
+        background: rgba(88, 166, 255, 0.12);
+      }
+      .hint {
+        margin-top: 10px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      kbd {
+        background: rgba(255, 255, 255, 0.06);
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="ui">
+      <h1>Vista 3D — sensores OSC</h1>
+      <div id="status">Conectando…</div>
+      <div style="font-size: 11px; color: var(--muted); margin-bottom: 6px">
+        Orígenes (clic para seguir uno):
+      </div>
+      <ul id="sources"></ul>
+      <p class="hint">
+        Arrastra para orbitar · rueda zoom · datos vía WebSocket del
+        <kbd>udp-listener</kbd>
+      </p>
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+      const statusEl = document.getElementById("status");
+      const sourcesEl = document.getElementById("sources");
+      const canvas = document.getElementById("c");
+
+      /** @type {Map<string, { aX:number,aY:number,aZ:number,gX:number,gY:number,gZ:number }>} */
+      const latest = new Map();
+      let selectedId = null;
+      let lastFrame = performance.now();
+
+      /** Yaw integrado (rad), solo giroscopio — se combina con tilt de acel. */
+      const yawBySource = new Map();
+
+      /**
+       * Tilt a partir del vector aceleración en m/s² (Android / react-native-sensors).
+       * Orden YXZ: yaw luego pitch luego roll.
+       */
+      function eulerFromAccel(ax, ay, az) {
+        const pitch = Math.atan2(-ax, Math.sqrt(ay * ay + az * az));
+        const roll = Math.atan2(ay, az);
+        return { pitch, roll };
+      }
+
+      const DEG2RAD = Math.PI / 180;
+      /** g* en °/s (APK) → incremento de yaw en rad. */
+      function gyroYawDeltaDegPerS(v, dt) {
+        const w = Number(v);
+        if (!Number.isFinite(w)) return 0;
+        const c = Math.max(-360, Math.min(360, w));
+        return c * DEG2RAD * dt;
+      }
+
+      function applyOrientation(group, id, data, dt) {
+        let yaw = yawBySource.get(id) ?? 0;
+        yaw += gyroYawDeltaDegPerS(data.gZ, dt) * 0.85;
+        yaw += gyroYawDeltaDegPerS(data.gY, dt) * 0.12;
+        yaw *= 0.998;
+        yawBySource.set(id, yaw);
+
+        const { pitch, roll } = eulerFromAccel(data.aX, data.aY, data.aZ);
+        group.rotation.order = "YXZ";
+        group.rotation.set(pitch, yaw, roll);
+      }
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0d1117);
+
+      const camera = new THREE.PerspectiveCamera(
+        50,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        200
+      );
+      camera.position.set(2.2, 1.6, 3.2);
+
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+
+      const controls = new OrbitControls(camera, canvas);
+      controls.enableDamping = true;
+      controls.target.set(0, 0.4, 0);
+
+      scene.add(new THREE.AmbientLight(0x8899aa, 0.55));
+      const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+      dir.position.set(4, 8, 5);
+      scene.add(dir);
+
+      const grid = new THREE.GridHelper(8, 16, 0x30363d, 0x21262d);
+      scene.add(grid);
+
+      const planeGeo = new THREE.PlaneGeometry(6, 6);
+      const planeMat = new THREE.MeshStandardMaterial({
+        color: 0x161b22,
+        roughness: 0.95,
+        metalness: 0,
+        side: THREE.DoubleSide,
+      });
+      const floor = new THREE.Mesh(planeGeo, planeMat);
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.y = -0.01;
+      scene.add(floor);
+
+      /** @type {Map<string, THREE.Group>} */
+      const meshes = new Map();
+      const palette = [
+        0x58a6ff, 0x3fb950, 0xd2a8ff, 0xff7b72, 0xffa657, 0x79c0ff,
+      ];
+      let colorIdx = 0;
+
+      function ensureMesh(id) {
+        if (meshes.has(id)) return meshes.get(id);
+        const color = palette[colorIdx % palette.length];
+        colorIdx++;
+
+        const g = new THREE.Group();
+        g.userData.sourceId = id;
+
+        const bodyMat = new THREE.MeshStandardMaterial({
+          color,
+          roughness: 0.45,
+          metalness: 0.25,
+        });
+        const phone = new THREE.Mesh(
+          new THREE.BoxGeometry(0.45, 0.95, 0.06),
+          bodyMat
+        );
+        phone.position.y = 0.48;
+        phone.castShadow = true;
+        g.add(phone);
+
+        const screenMat = new THREE.MeshStandardMaterial({
+          color: 0x0a0e14,
+          roughness: 0.2,
+          metalness: 0.5,
+          emissive: color,
+          emissiveIntensity: 0.08,
+        });
+        const screen = new THREE.Mesh(
+          new THREE.BoxGeometry(0.38, 0.78, 0.01),
+          screenMat
+        );
+        screen.position.set(0, 0.48, 0.035);
+        g.add(screen);
+
+        const edges = new THREE.LineSegments(
+          new THREE.EdgesGeometry(new THREE.BoxGeometry(0.45, 0.95, 0.06)),
+          new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 })
+        );
+        edges.position.y = 0.48;
+        g.add(edges);
+
+        const spread = (meshes.size % 4) * 0.85 - 1.275;
+        g.position.set(spread, 0, (Math.floor(meshes.size / 4) % 3) * 0.6 - 0.6);
+        scene.add(g);
+        meshes.set(id, g);
+        return g;
+      }
+
+      function rebuildSourceList() {
+        sourcesEl.innerHTML = "";
+        const ids = [...latest.keys()].sort();
+        if (!ids.length) {
+          const li = document.createElement("li");
+          li.textContent = "(esperando /aX … /gZ)";
+          li.style.color = "var(--muted)";
+          sourcesEl.appendChild(li);
+          return;
+        }
+        for (const id of ids) {
+          const li = document.createElement("li");
+          li.textContent = id;
+          if (id === selectedId) li.classList.add("active");
+          li.addEventListener("click", () => {
+            selectedId = id;
+            rebuildSourceList();
+            const m = meshes.get(id);
+            if (m) {
+              controls.target.copy(m.position).add(new THREE.Vector3(0, 0.45, 0));
+            }
+          });
+          sourcesEl.appendChild(li);
+        }
+      }
+
+      function wsUrl() {
+        const p = location.protocol === "https:" ? "wss:" : "ws:";
+        return `${p}//${location.host}/ws-sensor3d`;
+      }
+
+      function connect() {
+        const ws = new WebSocket(wsUrl());
+        ws.onopen = () => {
+          statusEl.textContent = "WebSocket conectado";
+          statusEl.classList.add("ok");
+        };
+        ws.onclose = () => {
+          statusEl.textContent = "Desconectado — reintentando…";
+          statusEl.classList.remove("ok");
+          setTimeout(connect, 2000);
+        };
+        ws.onerror = () => {
+          ws.close();
+        };
+        ws.onmessage = (ev) => {
+          try {
+            const msg = JSON.parse(ev.data);
+            if (msg.type === "snapshot" || msg.type === "sensor3d") {
+              const srcs = msg.sources || [];
+              for (const s of srcs) {
+                if (!s.id) continue;
+                latest.set(s.id, {
+                  aX: s.aX ?? 0,
+                  aY: s.aY ?? 0,
+                  aZ: s.aZ ?? 9.81,
+                  gX: s.gX ?? 0,
+                  gY: s.gY ?? 0,
+                  gZ: s.gZ ?? 0,
+                });
+                ensureMesh(s.id);
+              }
+              rebuildSourceList();
+            }
+          } catch {
+            /* ignore */
+          }
+        };
+      }
+
+      connect();
+
+      function animate() {
+        requestAnimationFrame(animate);
+        const now = performance.now();
+        const dt = Math.min(0.05, (now - lastFrame) / 1000);
+        lastFrame = now;
+
+        for (const [id, data] of latest) {
+          const group = ensureMesh(id);
+          applyOrientation(group, id, data, dt);
+        }
+
+        if (selectedId && meshes.has(selectedId)) {
+          const m = meshes.get(selectedId);
+          const targetY = m.position.y + 0.45;
+          controls.target.lerp(
+            new THREE.Vector3(m.position.x, targetY, m.position.z),
+            0.06
+          );
+        }
+
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    </script>
+  </body>
+</html>
